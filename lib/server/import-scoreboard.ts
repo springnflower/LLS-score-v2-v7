@@ -6,7 +6,7 @@ import { prisma } from './db';
 import { DEFAULT_GOALS } from './default-goals';
 import { DEFAULT_COST_MASTERS } from './default-cost-masters';
 import { DEFAULT_CHANNEL_FEE_RULES } from './default-channel-fee-rules';
-import { persistUploadedWorkbook } from './storage';
+import { persistUploadedWorkbook } from './storage/index';
 import { rebuildSalesFactFromBatch } from './build-sales-fact';
 import type {
   GoalTargetInput,
