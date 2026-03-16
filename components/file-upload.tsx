@@ -26,7 +26,7 @@ export function FileUpload() {
 
   const doImport = async (payload: PersistedDashboardResponse | { message: string; detail?: string }, ok: boolean) => {
     if (!ok || !('batchId' in payload)) {
-      setErrorFromResponse(payload, setError);
+      setErrorFromResponse(payload as any, setError);
       return;
     }
     hydrate(payload);

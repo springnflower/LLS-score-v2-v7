@@ -64,11 +64,13 @@ export async function GET() {
       const prevRev = getRev(prevMonth);
       const momPct =
         prevRev > 0 ? ((rev - prevRev) / prevRev) * 100 : rev > 0 ? 100 : 0;
-      (point as Record<string, number>)[dataKey] = Math.round(momPct * 10) / 10;
-      const amountKey = dataKey === '입점사 토탈' ? '입점사토탈_금액' : `${dataKey}_금액`;
-      (point as Record<string, number>)[amountKey] = rev;
-    }
 
+      const record = point as any;
+      record[dataKey] = Math.round(momPct * 10) / 10;
+      const amountKey =
+        dataKey === '입점사 토탈' ? '입점사토탈_금액' : `${dataKey}_금액`;
+      record[amountKey] = rev;
+    }
     data.push(point);
   }
 

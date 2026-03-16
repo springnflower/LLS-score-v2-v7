@@ -28,7 +28,7 @@ export function DashboardPage() {
     totalContribution: number;
     totalAdSpend: number;
     contributionAfterAdSpend: number;
-  }>('/api/sales/summary', (url) => fetch(url).then((res) => res.json()));
+  }>('/api/sales/summary', (url: string) => fetch(url).then((res) => res.json()));
 
   useEffect(() => {
     (async () => {
