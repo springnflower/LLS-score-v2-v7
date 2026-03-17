@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { AuthGate } from '@/components/auth-gate';
 
 export const metadata: Metadata = {
   title: 'LLS Scoreboard',
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }
