@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button, Card, Input, SectionTitle, Select } from './ui';
 import { FileUpload } from './file-upload';
 import { MonthlyLineChart } from './charts';
 import { useScoreboardStore } from '@/lib/store';
 import { getDashboardModel } from '@/lib/metrics';
 import type { BatchSummary, KpiCard, PersistedDashboardResponse } from '@/lib/types';
+import type { AiInsightsPayload } from '@/app/api/ai-insights/route';
 
 const currency = (v: number) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(v || 0);
 const num = (v: number) => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(v || 0);
@@ -63,6 +66,62 @@ export function DashboardPage() {
       bepSalesByProfit,
     };
   }, [summary]);
+
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const fetchAiInsights = useCallback(async () => {
+    if (!model) {
+      setAiError('대시보드 데이터가 없습니다. 배치를 선택하거나 데이터를 업로드해 주세요.');
+      return;
+    }
+    setAiLoading(true);
+    setAiError(null);
+    setAiInsights(null);
+    try {
+      const payload: AiInsightsPayload = {
+        kpis: model.kpis.map((k) => ({ label: k.label, value: k.value, unit: k.unit ?? 'count', description: k.description })),
+        overallTarget: {
+          totalTarget: model.overallTarget?.totalTarget ?? 0,
+          achievedRevenue: model.overallTarget?.achievedRevenue ?? 0,
+          remainingToTarget: model.overallTarget?.remainingToTarget ?? 0,
+          achievementRate: model.overallTarget?.achievementRate ?? 0,
+        },
+        bep,
+        targetScenario: {
+          totalGoal: model.targetScenario?.totalGoal ?? 0,
+          remainingGoal: model.targetScenario?.remainingGoal ?? 0,
+          remainingMonths: model.targetScenario?.remainingMonths ?? 0,
+          requiredMonthlySales: model.targetScenario?.requiredMonthlySales ?? 0,
+        },
+        inventorySummary: { qty: model.inventorySummary?.qty ?? 0, asset: model.inventorySummary?.asset ?? 0 },
+        monthlyTrend: (model.monthlyTrend ?? []).map((row: any) => ({ month: row.month, sales: row.sales, spend: row.spend || row.adSpend || 0, target: row.target || 0 })),
+        planningAlerts: (model.planningAlerts ?? []).map((a: any) => ({ type: a.type, message: a.message, severity: a.severity })),
+        channelFeeTotals: (model.channelFeeTotals ?? []).map((row: any) => ({ channel: row.channel, fee: row.fee, expectedFee: row.expectedFee ?? 0, variance: row.variance ?? 0, feeRate: row.feeRate ?? 0 })),
+        mediaSpendTotals: (model.mediaSpendTotals ?? []).map((row: any) => ({ media: row.media, spend: row.spend, share: row.share ?? 0 })),
+        skuGoalTrackerSample: (model.skuGoalTracker ?? []).slice(0, 10).map((row: any) => ({
+          productName: row.productName,
+          sales: row.sales,
+          targetRevenue: row.targetRevenue ?? 0,
+          achievementRate: row.achievementRate ?? 0,
+          sellThrough: row.sellThrough ?? 0,
+        })),
+        filters: { month: filters.month, channel: filters.channel, category: filters.category },
+      };
+      const res = await fetch('/api/ai-insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (!res.ok) {
+        setAiError(json.error || json.detail || '요청 실패');
+        return;
+      }
+      setAiInsights(json.content ?? null);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : '네트워크 오류');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [model, bep, filters]);
 
   async function onChangeBatch(nextId: string) {
     setLoading(true);
@@ -150,6 +209,44 @@ export function DashboardPage() {
             </Card>
           ))}
         </section>
+
+        <Card className="border-violet-200 bg-gradient-to-br from-violet-50/80 to-white">
+          <SectionTitle
+            title="AI 인사이트 & 제언"
+            description="현재 대시보드에 표시된 모든 데이터를 분석해 인사이트와 실행 제언을 제공합니다."
+            action={
+              <Button onClick={fetchAiInsights} disabled={aiLoading || !model} className="bg-violet-600 text-white hover:bg-violet-700">
+                {aiLoading ? '분석 중…' : 'AI 분석 요청'}
+              </Button>
+            }
+          />
+          {aiError && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {aiError}
+            </div>
+          )}
+          {aiInsights && (
+            <div className="ai-insights-prose mt-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="prose prose-slate max-w-none text-slate-700 prose-headings:font-semibold prose-headings:text-slate-900 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5"
+                components={{
+                  h1: ({ children }) => <h1 className="mb-2 mt-4 border-b border-slate-200 pb-2 text-lg first:mt-0">{children}</h1>,
+                  h2: ({ children }) => <h2 className="mb-2 mt-3 text-base font-semibold">{children}</h2>,
+                  h3: ({ children }) => <h3 className="mb-1 mt-2 text-sm font-semibold">{children}</h3>,
+                  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+                  ul: ({ children }) => <ul className="list-inside list-disc space-y-1 pl-2">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-inside list-decimal space-y-1 pl-2">{children}</ol>,
+                }}
+              >
+                {aiInsights}
+              </ReactMarkdown>
+            </div>
+          )}
+          {!aiInsights && !aiError && !aiLoading && (
+            <p className="mt-4 text-sm text-slate-500">위 「AI 분석 요청」 버튼을 누르면 현재 필터·KPI·BEP·목표·재고·채널·미디어·SKU 데이터를 바탕으로 AI가 요약·강점·주의사항·제언을 작성합니다.</p>
+          )}
+        </Card>
 
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <Card>
